@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: telemarketing-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
