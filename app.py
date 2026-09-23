@@ -33,6 +33,7 @@ GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_MODEL_FALLBACKS = ["gemini-3.5-flash-lite"]
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 MAX_CONTEXT_CHARS = 120_000
@@ -119,10 +120,6 @@ def download_telegram_file(file_id: str) -> tuple[str, bytes]:
 
 
 def ask_gemini(context_text: str, question: str) -> str:
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    )
     if context_text.strip():
         prompt = (
             "You are a helpful assistant answering questions using ONLY the "
@@ -141,20 +138,27 @@ def ask_gemini(context_text: str, question: str) -> str:
 
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    models_to_try = [GEMINI_MODEL] + [m for m in GEMINI_MODEL_FALLBACKS if m != GEMINI_MODEL]
     last_error = None
-    for attempt in range(3):
-        r = requests.post(url, json=payload, timeout=60)
-        if r.ok:
-            data = r.json()
-            try:
-                return data["candidates"][0]["content"]["parts"][0]["text"]
-            except (KeyError, IndexError):
-                return "Sorry, I couldn't generate a response for that."
-        last_error = r.text
-        if r.status_code == 503 and attempt < 2:
-            time.sleep(2 * (attempt + 1))
-            continue
-        break
+    for model in models_to_try:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent?key={GEMINI_API_KEY}"
+        )
+        retries = 3 if model == GEMINI_MODEL else 1
+        for attempt in range(retries):
+            r = requests.post(url, json=payload, timeout=60)
+            if r.ok:
+                data = r.json()
+                try:
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                except (KeyError, IndexError):
+                    return "Sorry, I couldn't generate a response for that."
+            last_error = r.text
+            if r.status_code == 503 and attempt < retries - 1:
+                time.sleep(2 * (attempt + 1))
+                continue
+            break
 
     log.error("Gemini error: %s", last_error)
     return "Sorry, I hit an error talking to the AI service. Please try again in a moment."
