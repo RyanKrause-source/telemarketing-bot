@@ -145,9 +145,9 @@ def ask_gemini(context_text: str, question: str) -> str:
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={GEMINI_API_KEY}"
         )
-        retries = 3 if model == GEMINI_MODEL else 1
+        retries = 2 if model == GEMINI_MODEL else 1
         for attempt in range(retries):
-            r = requests.post(url, json=payload, timeout=60)
+            r = requests.post(url, json=payload, timeout=25)
             if r.ok:
                 data = r.json()
                 try:
