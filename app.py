@@ -18,6 +18,7 @@ import io
 import os
 import sqlite3
 import logging
+import time
 
 import requests
 from flask import Flask, request, jsonify
@@ -139,15 +140,24 @@ def ask_gemini(context_text: str, question: str) -> str:
         )
 
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    r = requests.post(url, json=payload, timeout=60)
-    if not r.ok:
-        log.error("Gemini error: %s", r.text)
-        return "Sorry, I hit an error talking to the AI service. Please try again in a moment."
-    data = r.json()
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        return "Sorry, I couldn't generate a response for that."
+
+    last_error = None
+    for attempt in range(3):
+        r = requests.post(url, json=payload, timeout=60)
+        if r.ok:
+            data = r.json()
+            try:
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            except (KeyError, IndexError):
+                return "Sorry, I couldn't generate a response for that."
+        last_error = r.text
+        if r.status_code == 503 and attempt < 2:
+            time.sleep(2 * (attempt + 1))
+            continue
+        break
+
+    log.error("Gemini error: %s", last_error)
+    return "Sorry, I hit an error talking to the AI service. Please try again in a moment."
 
 
 @app.route("/", methods=["GET"])
