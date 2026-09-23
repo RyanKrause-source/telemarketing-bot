@@ -147,7 +147,14 @@ def ask_gemini(context_text: str, question: str) -> str:
         )
         retries = 2 if model == GEMINI_MODEL else 1
         for attempt in range(retries):
-            r = requests.post(url, json=payload, timeout=25)
+            try:
+                r = requests.post(url, json=payload, timeout=40)
+            except requests.exceptions.RequestException as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                if attempt < retries - 1:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                break
             if r.ok:
                 data = r.json()
                 try:
